@@ -107,8 +107,7 @@ namespace PrimeTween {
             }
             #endif
             var tween = PrimeTweenManager.fetchTween();
-            tween.propType = PropType.Float;
-            tween.tweenType = TweenType.MainSequence;
+            tween.setPropType(PropType.Float);
             if (cycleMode == CycleMode.Incremental) {
                 Debug.LogError($"Sequence doesn't support CycleMode.Incremental. Parameter {nameof(sequenceEase)} is applied to the sequence's 'timeline', and incrementing the 'timeline' doesn't make sense. For the same reason, {nameof(sequenceEase)} is clamped to [0:1] range.");
                 cycleMode = CycleMode.Restart;
@@ -121,7 +120,7 @@ namespace PrimeTween {
                 sequenceEase = Ease.Linear;
             }
             var settings = new TweenSettings(0f, sequenceEase, cycles, cycleMode, 0f, 0f, useUnscaledTime, useFixedUpdate);
-            tween.Setup(PrimeTweenManager.dummyTarget, ref settings, _ => {}, null, false);
+            tween.Setup(PrimeTweenManager.dummyTarget, ref settings, _ => {}, null, false, TweenType.MainSequence);
             tween.intParam = emptySequenceTag;
             var root = PrimeTweenManager.addTween(tween);
             Assert.IsTrue(root.isAlive);
@@ -282,6 +281,7 @@ namespace PrimeTween {
             tween.sequence = this;
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("ReSharper", "CompareOfFloatsByEqualityOperator")]
         bool ValidateCanAdd(Tween other) {
             if (!ValidateCanManipulateSequence()) {
                 return false;
@@ -290,25 +290,29 @@ namespace PrimeTween {
                 Debug.LogError(Constants.addDeadTweenToSequenceError);
                 return false;
             }
-            if (other.tween.settings.cycles == -1) {
+            var tween = other.tween;
+            if (tween.settings.cycles == -1) {
                 Debug.LogError(Constants.infiniteTweenInSequenceError);
                 return false;
             }
-            if (other.tween._isPaused) {
+            var rootTween = root.tween;
+            if (tween._isPaused && tween._isPaused != rootTween._isPaused) {
                 warnIgnoredChildrenSetting(nameof(isPaused));
             }
-            // ReSharper disable once CompareOfFloatsByEqualityOperator
-            if (other.tween.timeScale != 1f) {
+            if (tween.timeScale != 1f && tween.timeScale != rootTween.timeScale) {
                 warnIgnoredChildrenSetting(nameof(timeScale));
             }
-            if (other.tween.settings.useUnscaledTime) {
+            if (tween.settings.useUnscaledTime && tween.settings.useUnscaledTime != rootTween.settings.useUnscaledTime) {
                 warnIgnoredChildrenSetting(nameof(TweenSettings.useUnscaledTime));
             }
-            if (other.tween.settings.useFixedUpdate) {
+            if (tween.settings.useFixedUpdate && tween.settings.useFixedUpdate != rootTween.settings.useFixedUpdate) {
                 warnIgnoredChildrenSetting(nameof(TweenSettings.useFixedUpdate));
             }
             void warnIgnoredChildrenSetting(string settingName) {
-                Debug.LogError($"'{settingName}' was ignored after adding tween/sequence to the Sequence. Parent Sequence controls isPaused/timeScale/useUnscaledTime/useFixedUpdate of all its children tweens and sequences.\n");
+                Debug.LogError($"'{settingName}' was ignored after adding child animation to the Sequence. Parent Sequence controls '{settingName}' of all its children animations.\n" +
+                               "To prevent this error:\n" +
+                               $"- Use the default value of '{settingName}' in child animation.\n" +
+                               $"- OR use the same '{settingName}' in child animation.\n\n");
             }
             return true;
         }
